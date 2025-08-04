@@ -1,0 +1,133 @@
+esphome:
+  name: billy_bass_voice
+  friendly_name: Billy Bass
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+logger:
+api:
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+external_components:
+  - source:
+      type: local
+      path: components
+
+# external_components:
+#   - source:
+#       type: local
+#       path: custom_components
+#     components: [ billy_mouth_sync ]
+
+billy_mouth_sync_adc:
+  id: mouth_sync
+  mouth_motor_id: mouth_motor
+
+# ===== I2S AUDIO BUS (MAX98357A) =====
+i2s_audio:
+  - id: i2s_out
+    i2s_lrclk_pin: GPIO23
+    i2s_bclk_pin: GPIO19
+
+# ===== MEDIA PLAYER =====
+media_player:
+  - platform: i2s_audio
+    name: "Billy Bass Speaker"
+    id: billy_player
+    dac_type: external
+    i2s_audio_id: i2s_out
+    i2s_dout_pin: GPIO18
+    on_state:
+      then:
+        - lambda: |-
+            if (id(billy_player).state == media_player::MEDIA_PLAYER_STATE_PLAYING) {
+              id(mouth_sync).start_sync();
+            } else {
+              id(mouth_sync).stop_sync();
+            }
+
+# media_player:
+#   - platform: i2s_audio
+#     name: "Billy Bass Speaker"
+#     id: billy_player
+#     dac_type: external
+#     i2s_audio_id: i2s_out
+#     i2s_dout_pin: GPIO18  # safer than GPIO18
+#     on_state:
+#       then:
+#         - lambda: |-
+#             if (id(billy_player).state == media_player::MEDIA_PLAYER_STATE_PLAYING) {
+#               id(mouth_sync).start_sync();
+#             } else {
+#               id(mouth_sync).stop_sync();
+#             }
+
+# ===== MOUTH MOTOR =====
+output:
+  - platform: ledc
+    pin: GPIO14
+    id: motor_forward_pin
+  - platform: ledc
+    pin: GPIO27
+    id: motor_reverse_pin
+  - platform: ledc
+    pin: GPIO26
+    id: motor2_forward_pin
+  - platform: ledc
+    pin: GPIO33
+    id: motor2_reverse_pin
+
+fan:
+  # - platform: hbridge
+  #   id: mouth_motor
+  #   name: "Billy Bass Mouth"
+  #   pin_a: motor_forward
+  #   pin_b: motor_reverse
+  #   decay_mode: fast
+
+  - platform: hbridge
+    id: mouth_motor
+    name: "Motor2"
+    pin_a: motor2_forward_pin
+    pin_b: motor2_reverse_pin
+    # enable_pin: motor_enable
+    decay_mode: fast # slow decay mode (coasting) or fast decay (braking).
+
+# output:
+#   - platform: ledc
+#     pin: GPIO14
+#     id: motor_forward_pin
+#   - platform: ledc
+#     pin: GPIO27
+#     id: motor_reverse_pin
+#   - platform: ledc
+#     pin: GPIO26
+#     id: motor2_forward_pin
+#   - platform: ledc
+#     pin: GPIO33
+#     id: motor2_reverse_pin
+
+# fan:
+#   - platform: hbridge
+#     id: motor1
+#     name: "Motor1"
+#     pin_a: motor_reverse_pin
+#     pin_b: motor_forward_pin
+#     # enable_pin: motor_enable
+#     decay_mode: fast   # slow decay mode (coasting) or fast decay (braking).
+
+#   - platform: hbridge
+#     id: motor2
+#     name: "Motor2"
+#     pin_a: motor2_forward_pin
+#     pin_b: motor2_reverse_pin
+#     # enable_pin: motor_enable
+#     decay_mode: fast   # slow decay mode (coasting) or fast decay (braking).
