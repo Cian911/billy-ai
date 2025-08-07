@@ -1,37 +1,42 @@
 #include "billy_mouth_sync.h"
+#include "esphome/core/log.h"
 
 namespace esphome {
 namespace billy_mouth_sync {
 
-BillyMouthSync::BillyMouthSync(fan::Fan *motor) {
-  mouth_motor = motor;
-}
+static const char *const TAG = "BillyMouthSync";
 
 void BillyMouthSync::start_sync() {
-  ESP_LOGI("BillyMouthSync", "Starting mouth sync");
-  syncing = true;
+  ESP_LOGI(TAG, "Starting mouth sync");
+  syncing_ = true;
 }
 
 void BillyMouthSync::stop_sync() {
-  ESP_LOGI("BillyMouthSync", "Stopping mouth sync");
-  syncing = false;
-  if (mouth_motor) mouth_motor->turn_off();
+  ESP_LOGI(TAG, "Stopping mouth sync");
+  syncing_ = false;
+  if (mouth_motor_ != nullptr)
+    mouth_motor_->turn_off().perform();
 }
 
 void BillyMouthSync::loop() {
-  if (!syncing || !mouth_motor) return;
+  if (!syncing_ || mouth_motor_ == nullptr)
+    return;
 
-  if (millis() - last_check > 300) { // toggle every 0.3 sec
-    last_check = millis();
-    static bool mouth_open = false;
-    mouth_open = !mouth_open;
-    if (mouth_open) {
-      mouth_motor->turn_on();
+  //float amplitude = rms_sensor_->state;
+  //ESP_LOGD(TAG, "Amplitude: %.2f", amplitude);
+
+  if (millis() - last_check_ > 300) { // toggle every 0.3 sec
+    last_check_ = millis();
+    static bool mouth_open_ = false;
+    mouth_open_ = !mouth_open_;
+    if (mouth_open_) {
+      mouth_motor_->turn_on().perform();
     } else {
-      mouth_motor->turn_off();
+      mouth_motor_->turn_off().perform();
     }
   }
 }
 
 }  // namespace billy_mouth_sync
 }  // namespace esphome
+

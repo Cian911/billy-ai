@@ -36,6 +36,7 @@ external_components:
 switch:
   - platform: template
     name: "Test Mouth Motor"
+    optimistic: true
     turn_on_action:
       - lambda: |-
           id(mouth_motor)->turn_on().perform();
@@ -45,54 +46,51 @@ switch:
 
 # ========== I2S AUDIO ==========
 i2s_audio:
-  # - id: i2s_out
-  #   i2s_lrclk_pin: GPIO25
-  #   i2s_bclk_pin: GPIO26
-  - id: i2s_mic
-    i2s_lrclk_pin: GPIO32 # WS from INMP441
-    i2s_bclk_pin: GPIO33 # SCK from INMP441
+  - id: i2s_out
+    i2s_lrclk_pin: GPIO25
+    i2s_bclk_pin: GPIO26
+  # - id: i2s_mic
+  #   i2s_lrclk_pin: GPIO32    # WS from INMP441
+  #   i2s_bclk_pin: GPIO33     # SCK from INMP441
 
 # ========== AUDIO OUTPUT ==========
-# media_player:
-#   - platform: i2s_audio
-#     name: "Billy Bass Speaker"
-#     id: billy_player
-#     dac_type: external
-#     i2s_audio_id: i2s_out
-#     i2s_dout_pin: GPIO22
-#     on_state:
-#       then:
-#         - lambda: |-
-#             id(mouth_sync).start_sync();
-#         - delay: 5s
-#         - lambda: |-
-#             id(mouth_sync).stop_sync();
+media_player:
+  - platform: i2s_audio
+    name: "Billy Bass Speaker"
+    id: billy_player
+    dac_type: external
+    i2s_audio_id: i2s_out
+    i2s_dout_pin: GPIO22
+    on_state:
+      then:
+        - lambda: |-
+            id(mouth_sync).start_sync();
 
 # ========== MICROPHONE ==========
-microphone:
-  - platform: i2s_audio
-    id: inmp441_mic
-    i2s_audio_id: i2s_mic
-    adc_type: external
-    i2s_din_pin: GPIO17
-    pdm: false
+# microphone:
+#   - platform: i2s_audio
+#     id: inmp441_mic
+#     i2s_audio_id: i2s_mic
+#     adc_type: external
+#     i2s_din_pin: GPIO17
+#     pdm: false
 
-sensor:
-  - platform: sound_level
-    id: audio_rms_sensor
-    microphone: inmp441_mic
-    passive: false
-    peak:
-      name: "Audio Peak Amplitude"
-    rms:
-      name: "Audio RMS Amplitude"
-      id: audio_rms_amplitude
+# sensor:
+#   - platform: sound_level
+#     id: audio_rms_sensor
+#     microphone: inmp441_mic
+#     passive: false
+#     peak:
+#       name: "Audio Peak Amplitude"
+#     rms:
+#       name: "Audio RMS Amplitude"
+#       id: audio_rms_amplitude
 
 # ========== BILLY MOUTH SYNC ==========
 billy_mouth_sync:
   id: mouth_sync
   mouth_motor_id: mouth_motor
-  audio_rms_id: audio_rms_amplitude
+  #audio_rms_id: audio_rms_amplitude
 
 # ========== MOUTH MOTOR ==========
 output:

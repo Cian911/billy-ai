@@ -3,11 +3,6 @@ esphome:
   friendly_name: Billy4
   min_version: 2025.5.0
   name_add_mac_suffix: false
-  on_boot:
-    priority: 800
-    then:
-      - lambda: |-
-          id(mouth_motor).state;
 
 esp32:
   board: esp32dev
@@ -22,7 +17,7 @@ api:
 
 # Allow Over-The-Air updates
 ota:
-  - platform: esphome
+- platform: esphome
 
 wifi:
   ssid: !secret wifi_ssid
@@ -33,40 +28,30 @@ external_components:
       type: local
       path: components
 
-switch:
-  - platform: template
-    name: "Test Mouth Motor"
-    turn_on_action:
-      - lambda: |-
-          id(mouth_motor)->turn_on().perform();
-    turn_off_action:
-      - lambda: |-
-          id(mouth_motor)->turn_off().perform();
-
 # ========== I2S AUDIO ==========
 i2s_audio:
-  # - id: i2s_out
-  #   i2s_lrclk_pin: GPIO25
-  #   i2s_bclk_pin: GPIO26
+  - id: i2s_out
+    i2s_lrclk_pin: GPIO25
+    i2s_bclk_pin: GPIO26
   - id: i2s_mic
-    i2s_lrclk_pin: GPIO32 # WS from INMP441
-    i2s_bclk_pin: GPIO33 # SCK from INMP441
+    i2s_lrclk_pin: GPIO32    # WS from INMP441
+    i2s_bclk_pin: GPIO33     # SCK from INMP441
 
 # ========== AUDIO OUTPUT ==========
-# media_player:
-#   - platform: i2s_audio
-#     name: "Billy Bass Speaker"
-#     id: billy_player
-#     dac_type: external
-#     i2s_audio_id: i2s_out
-#     i2s_dout_pin: GPIO22
-#     on_state:
-#       then:
-#         - lambda: |-
-#             id(mouth_sync).start_sync();
-#         - delay: 5s
-#         - lambda: |-
-#             id(mouth_sync).stop_sync();
+media_player:
+  - platform: i2s_audio
+    name: "Billy Bass Speaker"
+    id: billy_player
+    dac_type: external
+    i2s_audio_id: i2s_out
+    i2s_dout_pin: GPIO22
+    on_state:
+      then:
+        - lambda: |-
+            id(mouth_sync).start_sync();
+        - delay: 5s
+        - lambda: |-
+            id(mouth_sync).stop_sync();
 
 # ========== MICROPHONE ==========
 microphone:
