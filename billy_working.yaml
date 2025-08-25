@@ -1,0 +1,346 @@
+
+esphome:
+  name: esphome-web-0d1ae8
+  friendly_name: mic-test
+  min_version: 2025.5.0
+  name_add_mac_suffix: false
+
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+
+# Allow Over-The-Air updates
+ota:
+- platform: esphome
+
+external_components:
+  - source:
+      type: local
+      path: components   # folder with components/speaker_tap/...
+
+i2s_audio:
+  - id: bus0
+    i2s_lrclk_pin: GPIO25   # mic WS/LRCLK
+    i2s_bclk_pin:  GPIO26   # mic BCLK/SCK
+  - id: i2s_out
+    i2s_lrclk_pin: GPIO18   # speaker LRC
+    i2s_bclk_pin:  GPIO19   # speaker BCLK
+
+speaker:
+  - platform: i2s_audio
+    id: spk_hw
+    dac_type: external
+    i2s_audio_id: i2s_out
+    i2s_dout_pin: GPIO21
+    #mode: mono
+
+  - platform: speaker_tap
+    id: spk_tap
+    sink: spk_hw
+    gain: 6.0
+    attack_ms: 8
+    release_ms: 120
+    publish_interval: 80ms
+    sample_rate: 22050        # <- must match your pipeline below
+    level:
+      id: audio_level
+      name: "Audio Level"
+      on_value:
+        then:
+          - lambda: |-
+              static float ema = 0.0f;
+              const float alpha = 0.25f;        // smooth the level
+              float v = x;                       // x = current % (0..100)
+              ema = (1.0f - alpha) * ema + alpha * v;
+
+              const float OPEN_TH   = 6.0f;     // open at >6%
+              const float CLOSE_TH  = 6.0f;     // close at <6%
+              const uint32_t REFRESH_MS = 140;  // nudge while loud
+              const uint32_t MIN_GAP_MS = 40;   // min gap between pulses
+              const uint32_t FAILSAFE_MS = 900; // auto-close if stuck
+
+              static bool open = false;
+              static uint32_t last_ms = 0;
+              uint32_t now = millis();
+
+              if (!open) {
+                if (ema > OPEN_TH && (now - last_ms > MIN_GAP_MS)) {
+                  id(mouth_open_pulse).execute();
+                  open = true;
+                  last_ms = now;
+                }
+              } else {
+                if (ema > OPEN_TH) {
+                  if (now - last_ms > REFRESH_MS) {
+                    id(mouth_open_keep).execute();
+                    last_ms = now;
+                  }
+                } else if (ema < CLOSE_TH) {
+                  id(mouth_close_pulse).execute();
+                  open = false;
+                  last_ms = now;
+                }
+                if (open && (now - last_ms > FAILSAFE_MS)) {
+                  id(mouth_close_pulse).execute();
+                  open = false;
+                  last_ms = now;
+                }
+              }
+
+media_player:
+  - platform: speaker
+    name: "esp_speaker"
+    id: mp
+    announcement_pipeline:
+      speaker: spk_tap
+      format: WAV
+      sample_rate: 22050
+      num_channels: 1
+
+microphone:
+  - platform: i2s_audio
+    id: mic
+    i2s_audio_id: bus0
+    adc_type: external
+    i2s_din_pin: GPIO33
+    channel: left           # <-- set to left if L/R pad is GND, right if L/R is 3V3
+    
+
+voice_assistant:
+  microphone: mic
+  id: va
+  noise_suppression_level: 0
+  auto_gain: 0dBFS
+  volume_multiplier: 4.0
+  use_wake_word: false
+  speaker: spk_tap
+  
+  on_error: 
+   - if:
+        condition:
+          switch.is_on: use_wake_word
+        then:
+          - switch.turn_off: use_wake_word
+          - switch.turn_on: use_wake_word      
+
+  on_client_connected:
+    - if:
+        condition:
+          switch.is_on: use_wake_word
+        then:
+          - voice_assistant.start_continuous:
+
+  on_client_disconnected:
+    - if:
+        condition:
+          switch.is_on: use_wake_word
+        then:
+          - voice_assistant.stop:
+        
+  on_wake_word_detected:
+    - light.turn_on: status_led
+    - lambda: |-
+          auto call = id(head_motor).turn_on();
+          call.set_direction(FanDirection::FORWARD);
+          call.set_speed(100);       // gentler
+          call.perform();
+
+  on_stt_end:
+    - light.turn_off: status_led
+    - lambda: |-
+          auto call = id(head_motor).turn_off();
+          call.set_direction(FanDirection::REVERSE);
+          call.set_speed(80);       // gentler
+          call.perform();
+    
+
+binary_sensor:
+  - platform: status
+    name: API Connection
+    id: api_connection
+    filters:
+      - delayed_on: 1s
+    on_press:
+      - if:
+          condition:
+            switch.is_on: use_wake_word
+          then:
+            - voice_assistant.start_continuous:
+    on_release:
+      - if:
+          condition:
+            switch.is_on: use_wake_word
+          then:
+            - voice_assistant.stop:
+
+
+switch:
+  - platform: restart
+    name: Restart Billy
+  - platform: template
+    name: Use wake word
+    id: use_wake_word
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+    on_turn_on:
+      - lambda: id(va).set_use_wake_word(true);
+      - if:
+          condition:
+            not:
+              - voice_assistant.is_running
+          then:
+            - voice_assistant.start_continuous
+    
+    on_turn_off:
+      - voice_assistant.stop
+      - lambda: id(va).set_use_wake_word(false);
+
+
+light:
+  - platform: binary
+    id: status_led
+    name: "Status LED"
+    output: led_out
+
+# # ========== MOUTH MOTOR ==========
+output:
+  - platform: ledc
+    pin: GPIO32
+    id: motor_forward_pin
+    frequency: 20000 Hz
+  - platform: ledc
+    pin: GPIO14
+    id: motor_reverse_pin
+    frequency: 20000 Hz
+  - platform: gpio
+    pin: GPIO02
+    id: led_out
+  - platform: ledc
+    frequency: 20000 Hz
+    pin: GPIO23
+    id: motor2_forward_pin
+  - platform: ledc
+    pin: GPIO22
+    frequency: 20000 Hz
+    id: motor2_reverse_pin
+
+fan:
+  - platform: hbridge
+    id: mouth_motor
+    name: "Billy Bass Mouth"
+    pin_a: motor_forward_pin
+    pin_b: motor_reverse_pin
+    decay_mode: SLOW
+    speed_count: 100
+
+  - platform: hbridge
+    id: head_motor
+    name: "Billy Bass Head"
+    pin_a: motor2_forward_pin
+    pin_b: motor2_reverse_pin
+    decay_mode: SLOW
+    speed_count: 100
+
+  - platform: hbridge
+    id: tail_motor
+    name: "Billy Bass Tail"
+    pin_a: motor2_reverse_pin
+    pin_b: motor2_forward_pin
+    decay_mode: SLOW
+    speed_count: 10
+
+globals:
+  - id: mouth_is_open
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: last_pulse_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+
+# Short motor pulses (tune speeds/durations for your gear/motor)
+script:
+  - id: mouth_open_pulse
+    mode: restart
+    then:
+      - lambda: |-
+          auto call = id(mouth_motor).turn_on();
+          call.set_direction(FanDirection::FORWARD);
+          call.set_speed(80);       // % open kick
+          call.perform();
+      - delay: 110ms                # open pulse
+      - lambda: |-
+          id(mouth_motor).turn_off().perform();
+
+  - id: mouth_open_keep            # shorter “keep-alive” nudge
+    mode: restart
+    then:
+      - lambda: |-
+          auto call = id(mouth_motor).turn_on();
+          call.set_direction(FanDirection::FORWARD);
+          call.set_speed(80);       // gentler
+          call.perform();
+      - delay: 60ms
+      - lambda: |-
+          id(mouth_motor).turn_off().perform();
+
+  - id: mouth_close_pulse
+    mode: restart
+    then:
+      - lambda: |-
+          auto call = id(mouth_motor).turn_on();
+          call.set_direction(FanDirection::REVERSE);
+          call.set_speed(75);       // close kick
+          call.perform();
+      - delay: 160ms                # just enough to fully close
+      - lambda: |-
+          id(mouth_motor).turn_off().perform();
+
+# Drive the state machine directly from audio_level updates
+sensor:
+  # (this is the same audio_level sensor defined in speaker_tap)
+  # add an on_value handler:
+  - platform: template
+    id: audio_level_router
+    update_interval: never
+    on_value:
+      then:
+        - lambda: |-
+            // Use the real audio_level value “x” from the event context:
+            // (we’ll wire this router via on_value below)
+            return;
+
+
+button:
+  - platform: template
+    name: "Head FWD 1s"
+    on_press:
+      - lambda: |-
+          auto c = id(head_motor).turn_on();
+          c.set_direction(FanDirection::FORWARD);
+          c.set_speed(100);
+          c.perform();
+      - delay: 1s
+      - lambda: 'id(head_motor).turn_off().perform();'
+
+  - platform: template
+    name: "Head REV 1s"
+    on_press:
+      - lambda: |-
+          auto c = id(head_motor).turn_on();
+          c.set_direction(FanDirection::REVERSE);
+          c.set_speed(100);
+          c.perform();
+      - delay: 1s
+      - lambda: 'id(head_motor).turn_off().perform();'
+
