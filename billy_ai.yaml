@@ -1,10 +1,8 @@
-
 esphome:
   name: esphome-web-0d1ae8
-  friendly_name: mic-test
+  friendly_name: Billy Bass AI
   min_version: 2025.5.0
   name_add_mac_suffix: false
-
 
 esp32:
   board: esp32dev
@@ -19,20 +17,27 @@ api:
 
 # Allow Over-The-Air updates
 ota:
-- platform: esphome
+  - platform: esphome
 
 external_components:
-  - source:
-      type: local
-      path: components   # folder with components/speaker_tap/...
+  source:
+    type: git
+    url: https://github.com/Cian911/billy-ai
+    ref: main
+    components: [speaker_tap]
+
+# external_components:
+#   - source:
+#       type: local
+#       path: components # folder with components/speaker_tap/...
 
 i2s_audio:
   - id: bus0
-    i2s_lrclk_pin: GPIO25   # mic WS/LRCLK
-    i2s_bclk_pin:  GPIO26   # mic BCLK/SCK
+    i2s_lrclk_pin: GPIO25 # mic WS/LRCLK
+    i2s_bclk_pin: GPIO26 # mic BCLK/SCK
   - id: i2s_out
-    i2s_lrclk_pin: GPIO18   # speaker LRC
-    i2s_bclk_pin:  GPIO19   # speaker BCLK
+    i2s_lrclk_pin: GPIO18 # speaker LRC
+    i2s_bclk_pin: GPIO19 # speaker BCLK
 
 speaker:
   - platform: i2s_audio
@@ -49,7 +54,7 @@ speaker:
     attack_ms: 8
     release_ms: 120
     publish_interval: 80ms
-    sample_rate: 22050        # <- must match your pipeline below
+    sample_rate: 22050 # <- must match your pipeline below
     level:
       id: audio_level
       name: "Audio Level"
@@ -111,8 +116,7 @@ microphone:
     i2s_audio_id: bus0
     adc_type: external
     i2s_din_pin: GPIO33
-    channel: left           # <-- set to left if L/R pad is GND, right if L/R is 3V3
-    
+    channel: left # <-- set to left if L/R pad is GND, right if L/R is 3V3
 
 voice_assistant:
   microphone: mic
@@ -122,14 +126,14 @@ voice_assistant:
   volume_multiplier: 4.0
   use_wake_word: false
   speaker: spk_tap
-  
-  on_error: 
-   - if:
+
+  on_error:
+    - if:
         condition:
           switch.is_on: use_wake_word
         then:
           - switch.turn_off: use_wake_word
-          - switch.turn_on: use_wake_word      
+          - switch.turn_on: use_wake_word
 
   on_client_connected:
     - if:
@@ -144,23 +148,22 @@ voice_assistant:
           switch.is_on: use_wake_word
         then:
           - voice_assistant.stop:
-        
+
   on_wake_word_detected:
     - light.turn_on: status_led
     - lambda: |-
-          auto call = id(head_motor).turn_on();
-          call.set_direction(FanDirection::FORWARD);
-          call.set_speed(100);       // gentler
-          call.perform();
+        auto call = id(head_motor).turn_on();
+        call.set_direction(FanDirection::FORWARD);
+        call.set_speed(100);       // gentler
+        call.perform();
 
   on_stt_end:
     - light.turn_off: status_led
     - lambda: |-
-          auto call = id(head_motor).turn_off();
-          call.set_direction(FanDirection::REVERSE);
-          call.set_speed(80);       // gentler
-          call.perform();
-    
+        auto call = id(head_motor).turn_off();
+        call.set_direction(FanDirection::REVERSE);
+        call.set_speed(80);       // gentler
+        call.perform();
 
 binary_sensor:
   - platform: status
@@ -181,7 +184,6 @@ binary_sensor:
           then:
             - voice_assistant.stop:
 
-
 switch:
   - platform: restart
     name: Restart Billy
@@ -199,11 +201,10 @@ switch:
               - voice_assistant.is_running
           then:
             - voice_assistant.start_continuous
-    
+
     on_turn_off:
       - voice_assistant.stop
       - lambda: id(va).set_use_wake_word(false);
-
 
 light:
   - platform: binary
@@ -262,11 +263,11 @@ globals:
   - id: mouth_is_open
     type: bool
     restore_value: no
-    initial_value: 'false'
+    initial_value: "false"
   - id: last_pulse_ms
     type: uint32_t
     restore_value: no
-    initial_value: '0'
+    initial_value: "0"
 
 # Short motor pulses (tune speeds/durations for your gear/motor)
 script:
@@ -278,11 +279,11 @@ script:
           call.set_direction(FanDirection::FORWARD);
           call.set_speed(80);       // % open kick
           call.perform();
-      - delay: 110ms                # open pulse
+      - delay: 110ms # open pulse
       - lambda: |-
           id(mouth_motor).turn_off().perform();
 
-  - id: mouth_open_keep            # shorter “keep-alive” nudge
+  - id: mouth_open_keep # shorter “keep-alive” nudge
     mode: restart
     then:
       - lambda: |-
@@ -302,7 +303,7 @@ script:
           call.set_direction(FanDirection::REVERSE);
           call.set_speed(75);       // close kick
           call.perform();
-      - delay: 160ms                # just enough to fully close
+      - delay: 160ms # just enough to fully close
       - lambda: |-
           id(mouth_motor).turn_off().perform();
 
@@ -320,7 +321,6 @@ sensor:
             // (we’ll wire this router via on_value below)
             return;
 
-
 button:
   - platform: template
     name: "Head FWD 1s"
@@ -331,7 +331,7 @@ button:
           c.set_speed(100);
           c.perform();
       - delay: 1s
-      - lambda: 'id(head_motor).turn_off().perform();'
+      - lambda: "id(head_motor).turn_off().perform();"
 
   - platform: template
     name: "Head REV 1s"
@@ -342,5 +342,4 @@ button:
           c.set_speed(100);
           c.perform();
       - delay: 1s
-      - lambda: 'id(head_motor).turn_off().perform();'
-
+      - lambda: "id(head_motor).turn_off().perform();"
