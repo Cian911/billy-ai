@@ -34,7 +34,7 @@ external_components:
 
 ## ⚡ Usage Example
 
-Here’s a minimal setup that plays audio via I²S and taps the stream to measure its level:
+Here’s a minimal setup that plays audio via I²S and taps the stream to measure its level (assuming you are using an ESP32-S3):
 
 ```yaml
 speaker:
@@ -42,8 +42,7 @@ speaker:
     id: spk_hw
     dac_type: external
     i2s_audio_id: i2s_out
-    i2s_dout_pin: GPIO21
-    # mode: mono  # optional
+    i2s_dout_pin: GPIO11
 
   - platform: speaker_tap
     id: spk_tap
