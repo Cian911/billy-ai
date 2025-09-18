@@ -27,7 +27,7 @@ external_components:
       type: git
       url: https://github.com/Cian911/billy-ai
       ref: main
-      components: [speaker_tap]
+    components: [speaker_tap]
 ```
 
 ---
