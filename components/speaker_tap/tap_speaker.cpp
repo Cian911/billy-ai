@@ -1,58 +1,60 @@
 #include "tap_speaker.h"
-#include "esphome/core/log.h"
+#include "esphome/core/helpers.h"  // for esphome::millis
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 namespace esphome {
 namespace speaker_tap {
 
-static const char *const TAG = "speaker_tap";
+// Helper to compute block time constants
+static inline float exp_tc(float ms, float tc_ms) {
+  if (tc_ms <= 1.0f) return 0.0f;
+  return std::exp(-ms / tc_ms);
+}
 
 size_t TapSpeaker::play(const uint8_t *data, size_t length) {
-  const uint8_t bps = this->stream_info_.bits_per_sample;  // 16 or 32
-  const uint8_t ch  = this->stream_info_.channels;         // 1 or 2
-  const uint32_t sr = this->stream_info_.sample_rate;
-  if (bps == 0 || ch == 0 || sr == 0) {
-    return sink_ ? sink_->play(data, length) : length;
-  }
+  // Assume signed 16-bit PCM (WAV pipeline), mono or stereo
+  const size_t n_s16 = length / sizeof(int16_t);
+  const int16_t *s16 = reinterpret_cast<const int16_t *>(data);
 
-  const size_t bytes_per_sample = bps / 8;
-  const size_t frame_size = bytes_per_sample * ch;
-  const size_t n_frames = length / frame_size;
-
-  // Accumulate normalized energy
   double sumsq = 0.0;
-  for (size_t i = 0; i < n_frames; i++) {
-    float mixed = 0.0f;
-    const uint8_t *p = data + i * frame_size;
-    for (uint8_t c = 0; c < ch; c++) {
-      if (bps == 16) {
-        int16_t s = reinterpret_cast<const int16_t *>(p)[c];
-        mixed += std::abs((int)s) / 32768.0f;
-      } else {  // 32-bit
-        int32_t s = reinterpret_cast<const int32_t *>(p)[c];
-        mixed += (std::abs((int64_t)s) / 2147483648.0f);
-      }
-    }
-    mixed /= ch;
-    sumsq += double(mixed) * double(mixed);
+  for (size_t i = 0; i < n_s16; i++) {
+    float v = std::abs((int)s16[i]) / 32768.0f;  // 0..1
+    sumsq += double(v) * double(v);
   }
 
-  if (n_frames > 0) {
-    float rms = std::sqrt(sumsq / double(n_frames));  // 0..1
-    // Per-block attack/release smoothing
-    const float block_ms = 1000.0f * float(n_frames) / float(sr);
-    const float att = std::exp(-block_ms / float(std::max<uint32_t>(1, attack_ms_)));
-    const float rel = std::exp(-block_ms / float(std::max<uint32_t>(1, release_ms_)));
+  if (n_s16 > 0) {
+    // Get stream info via getters (new API)
+    const uint8_t  bps = this->stream_info_.get_bits_per_sample();
+    const uint8_t  ch  = this->stream_info_.get_channels();
+    const uint32_t sr  = this->stream_info_.get_sample_rate();
+
+    // Derive approximate block duration
+    float block_ms = (1000.0f * float(n_s16)) / float(sr * ch);
+    float rms = std::sqrt(sumsq / double(n_s16));  // 0..1
+
+    // Attack/release smoothing
+    float att = exp_tc(block_ms, float(attack_ms_));
+    float rel = exp_tc(block_ms, float(release_ms_));
     if (rms > env_) env_ = rms + (env_ - rms) * att;
     else            env_ = rms + (env_ - rms) * rel;
 
-    float level = std::clamp(env_ * gain_, 0.0f, 1.0f);
-    uint32_t now = millis();
-    if (level_sensor_ && now - last_pub_ms_ >= publish_interval_ms_) {
+    // Publish every publish_interval_ms_ (via sample counting)
+    samples_since_pub_ += n_s16;
+    const uint64_t publish_every_samples =
+        (uint64_t(sample_rate_) * uint64_t(publish_interval_ms_)) / 1000ULL;
+
+    if (level_sensor_ && publish_every_samples > 0 &&
+        samples_since_pub_ >= publish_every_samples) {
+      float level = std::clamp(env_ * gain_, 0.0f, 1.0f);
       level_sensor_->publish_state(level * 100.0f);  // percent
-      last_pub_ms_ = now;
+      samples_since_pub_ = 0;
     }
+
+    // Example of timing (if you need wall time for failsafes)
+    uint32_t now = esphome::millis();
+    (void) now;  // avoid unused warning if not used
   }
 
   return sink_ ? sink_->play(data, length) : length;
@@ -60,3 +62,4 @@ size_t TapSpeaker::play(const uint8_t *data, size_t length) {
 
 }  // namespace speaker_tap
 }  // namespace esphome
+
