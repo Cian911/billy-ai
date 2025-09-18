@@ -15,10 +15,10 @@ ota:
   - platform: esphome
 
 external_components:
-  source:
-    type: git
-    url: https://github.com/Cian911/billy-ai
-    ref: main
+  - source:
+      type: git
+      url: https://github.com/Cian911/billy-ai
+      ref: main
     components: [speaker_tap]
 
 # ---------- I2S Buses ----------
