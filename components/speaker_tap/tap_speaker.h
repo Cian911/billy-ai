@@ -2,13 +2,12 @@
 #include "esphome/components/speaker/speaker.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/core/component.h"
-#include "esphome/components/audio/audio_stream.h"  // for AudioStreamInfo
 #include <cstdint>
 
 namespace esphome {
 namespace speaker_tap {
 
-// TapSpeaker: computes an envelope from incoming PCM (assumes 16-bit PCM),
+// TapSpeaker: computes an envelope from incoming 16-bit PCM,
 // publishes 0..100% level at a fixed cadence, and forwards audio to sink_.
 class TapSpeaker : public speaker::Speaker, public Component {
  public:
@@ -33,11 +32,6 @@ class TapSpeaker : public speaker::Speaker, public Component {
 
   size_t play(const uint8_t *data, size_t length) override;
 
-  // Updated: keep track of stream info (use getters, not direct members)
-  void set_audio_stream_info(const audio::AudioStreamInfo &info) {
-    this->stream_info_ = info;
-  }
-
  protected:
   speaker::Speaker *sink_{nullptr};
   sensor::Sensor *level_sensor_{nullptr};
@@ -49,11 +43,9 @@ class TapSpeaker : public speaker::Speaker, public Component {
   uint32_t release_ms_{120};
   float gain_{1.0f};
 
-  // Timing using sample counts (no bare millis dependency)
+  // Timing using sample counts
   uint32_t sample_rate_{22050};
   uint64_t samples_since_pub_{0};
-
-  audio::AudioStreamInfo stream_info_;
 };
 
 }  // namespace speaker_tap
