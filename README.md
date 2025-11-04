@@ -5,6 +5,8 @@
 `billy-ai` is an [ESPHome](https://esphome.io) **external component** that lets you _tap into_ an I²S speaker stream and measure real-time audio levels.  
 This is especially useful for animatronics (like a Billy Bass 🐟) where you want to synchronize a motorized mouth or body part with the audio being played.
 
+You can checkout the full step-by-step video on how to build this yourself here: [https://youtu.be/favga4OUhY8?si=XOFuUd9nN_tYkci1](https://youtu.be/favga4OUhY8?si=XOFuUd9nN_tYkci1)
+
 ---
 
 ## ✨ Features
